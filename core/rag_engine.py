@@ -53,6 +53,40 @@ def build_rag_chain(transcript: str, meeting_id: str = "default"):
     return rag_chain
 
 
+def get_rag_chain_for_meeting(meeting_id: str):
+    """Loads existing vector store for meeting_id and constructs RAG LCEL chain."""
+    vector_store = load_vector_store()
+    retriever = get_retriever(vector_store, k=6, meeting_id=meeting_id)
+    llm = get_llm()
+
+    prompt = ChatPromptTemplate.from_messages([
+        (
+            "system",
+            "You are an expert AI meeting assistant. Answer the user's question clearly and accurately "
+            "based on the relevant context retrieved from the meeting transcript below.\n\n"
+            "Guidelines:\n"
+            "- Rely on the context provided to construct a helpful response.\n"
+            "- If the provided context really has no relevance to the question, state: "
+            "'I could not find relevant information in the transcript for that question.'\n"
+            "- Keep answers clear, direct, and concise.\n\n"
+            "Meeting Context:\n{context}"
+        ),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "{question}"),
+    ])
+
+    return (
+        {
+            "context": (lambda x: x["question"]) | retriever | RunnableLambda(format_docs),
+            "chat_history": lambda x: x.get("chat_history", []),
+            "question": lambda x: x["question"],
+        }
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
+
+
 import sys
 
 def ask_question(rag_chain, question: str, chat_history: list = None) -> str:

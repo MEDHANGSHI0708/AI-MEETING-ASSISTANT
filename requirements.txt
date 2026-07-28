@@ -37,6 +37,12 @@ watchdog>=4.0.0                   # File-change watcher (improves Streamlit hot-
 reportlab>=4.2.0                  # PDF generation
 fpdf2>=2.7.9                      # Lightweight alternative PDF library
 
+# ── FastAPI Backend ────────────────────────────────────────────────────────────
+fastapi>=0.110.0
+uvicorn>=0.28.0
+python-multipart>=0.0.9
+email-validator>=2.1.0
+
 # ── Utilities ─────────────────────────────────────────────────────────────────
 python-dotenv>=1.0.0              # Load API keys from .env
 numpy>=1.26.0
