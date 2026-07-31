@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 from db.database import (
     init_db,

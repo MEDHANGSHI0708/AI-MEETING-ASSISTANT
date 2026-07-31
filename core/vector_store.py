@@ -12,9 +12,17 @@ EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
 
 def get_embeddings():
+    device = "cpu"
+    try:
+        import torch
+        if torch.cuda.is_available():
+            device = "cuda"
+    except Exception:
+        pass
+
     return HuggingFaceBgeEmbeddings(
         model_name=EMBEDDING_MODEL,
-        model_kwargs={"device": "cuda"},
+        model_kwargs={"device": device},
         encode_kwargs={"normalize_embeddings": True},
     )
 

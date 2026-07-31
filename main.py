@@ -1,7 +1,7 @@
 import uuid
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 def run_pipeline(source: str, language: str = "english") -> dict:
     from langchain_core.messages import HumanMessage, AIMessage
@@ -41,24 +41,24 @@ if __name__ == "__main__":
     insights = result["insights"]
 
     print("\n" + "=" * 60)
-    print(f"📌 Title: {insights.title}")
-    print(f"\n📋 Summary:\n{insights.summary}")
+    print(f"Title: {insights.title}")
+    print(f"\n Summary:\n{insights.summary}")
     
-    print("\n✅ Action Items:")
+    print("\nAction Items:")
     if insights.action_items:
         for i, item in enumerate(insights.action_items, 1):
             print(f"  {i}. {item.task} (Owner: {item.owner}, Deadline: {item.deadline})")
     else:
         print("  No action items found.")
 
-    print("\n🔑 Key Decisions:")
+    print("\nKey Decisions:")
     if insights.key_decisions:
         for i, d in enumerate(insights.key_decisions, 1):
             print(f"  {i}. {d}")
     else:
         print("  No key decisions found.")
 
-    print("\n❓ Open Questions:")
+    print("\nOpen Questions:")
     if insights.open_questions:
         for i, q in enumerate(insights.open_questions, 1):
             print(f"  {i}. {q}")
