@@ -34,6 +34,16 @@ class TokenResponse(BaseModel):
 class ProcessMeetingRequest(BaseModel):
     source: str = Field(..., description="YouTube URL or local file path")
     language: str = Field(default="english", description="english or hinglish")
+    job_id: Optional[str] = Field(
+        default=None,
+        description="Client-generated id used to poll /api/meetings/progress/{job_id}",
+    )
+
+
+class ProgressOut(BaseModel):
+    stage: str = Field(..., description="download, convert, chunk, transcribe, insights or index")
+    percent: Optional[float] = Field(None, description="0-100, or null when the stage is not measurable")
+    detail: str = ""
 
 
 class ActionItemOut(BaseModel):

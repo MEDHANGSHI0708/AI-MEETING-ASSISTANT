@@ -1,9 +1,12 @@
 import os
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional
 from pydub import AudioSegment
 
 from dotenv import load_dotenv
+
+from utils import progress
 
 GROQ_STT_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 GROQ_MODEL = os.getenv("GROQ_STT_MODEL", "whisper-large-v3-turbo")
@@ -166,16 +169,21 @@ def transcribe_chunk(chunk_path: str, language: str = "english") -> str:
     return transcribe_chunk_groq(chunk_path)
 
 
-def transcribe_all(chunks: list, language: str = "english") -> str:
+def transcribe_all(chunks: list, language: str = "english", job_id: Optional[str] = None) -> str:
     full_transcript = ""
     engine = "Sarvam AI (Parallel)" if (language.lower() == "hinglish" and os.getenv("SARVAM_API_KEY")) else f"Groq Cloud API ({GROQ_MODEL})"
     print(f"Using {engine} for transcription.")
 
+    total = len(chunks)
     for i, chunk in enumerate(chunks):
-        print(f"Transcribing chunk {i + 1}/{len(chunks)}...")
+        print(f"Transcribing chunk {i + 1}/{total}...")
+        # Reported before the call, so the bar reflects work started rather than
+        # jumping only once a slow chunk returns.
+        progress.update(job_id, "transcribe", (i / total) * 100, f"Part {i + 1} of {total}")
         text = transcribe_chunk(chunk, language=language)
         full_transcript += text + " "
 
+    progress.update(job_id, "transcribe", 100.0, f"{total} part(s) done")
     print("Transcription complete.")
     return full_transcript.strip()
 

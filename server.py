@@ -30,12 +30,14 @@ from schemas.models import (
     ChatMessageRequest,
     ChatMessageOut,
     ChatHistoryResponse,
+    ProgressOut,
 )
 from core.chat_service import (
     process_and_create_chat,
     ask_chat_question,
     stream_chat_question,
 )
+from utils import progress
 
 
 @asynccontextmanager
@@ -139,17 +141,23 @@ def process_meeting(
         chat_session = process_and_create_chat(
             user_id=user_id,
             source=payload.source,
-            language=payload.language
+            language=payload.language,
+            job_id=payload.job_id,
         )
         return chat_session
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process meeting: {str(e)}")
+    finally:
+        # The response itself carries the outcome, so the progress entry has no
+        # reader left once this returns.
+        progress.clear(payload.job_id)
 
 
 @app.post("/api/meetings/upload", response_model=ChatDetailOut)
 async def upload_and_process_meeting(
     file: UploadFile = File(...),
     language: str = Form("english"),
+    job_id: Optional[str] = Form(None),
     user_id: str = Depends(get_current_user_id)
 ):
     """Allows uploading audio/video files directly via multipart form-data."""
@@ -164,11 +172,29 @@ async def upload_and_process_meeting(
         chat_session = process_and_create_chat(
             user_id=user_id,
             source=file_path,
-            language=language
+            language=language,
+            job_id=job_id,
         )
         return chat_session
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process uploaded file: {str(e)}")
+    finally:
+        progress.clear(job_id)
+
+
+@app.get("/api/meetings/progress/{job_id}", response_model=ProgressOut)
+def get_meeting_progress(job_id: str):
+    """Polled while a meeting job runs. Returns 404 before the first stage is
+    recorded and after the job finishes, which the client treats as 'no update'
+    rather than an error."""
+    state = progress.get(job_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="No progress for this job.")
+    return ProgressOut(
+        stage=state["stage"],
+        percent=state["percent"],
+        detail=state["detail"],
+    )
 
 
 # ── SIDEBAR CHAT SESSIONS ROUTES ───────────────────────────────────────────────

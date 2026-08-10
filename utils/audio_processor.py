@@ -1,18 +1,52 @@
 import yt_dlp
 from pydub import AudioSegment
 import os
+from typing import Optional
+
+from utils import progress
 
 DOWNLOAD_DIR = 'downloades'
 os.makedirs(DOWNLOAD_DIR,exist_ok = True)
 
-def download_youtube_audio(url: str) -> str:
+def download_youtube_audio(url: str, job_id: Optional[str] = None) -> str:
     url = url.strip()
     output_path = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
+
+    def report(status: dict) -> None:
+        """yt-dlp progress hook. Reports real transferred bytes, not a guess."""
+        if status.get("status") == "downloading":
+            # total_bytes is exact; total_bytes_estimate is yt-dlp's estimate for
+            # streams that do not advertise a length. Either gives a real ratio.
+            total = status.get("total_bytes") or status.get("total_bytes_estimate")
+            done = status.get("downloaded_bytes") or 0
+            speed = status.get("speed")
+            detail = f"{progress.format_bytes(done)} of {progress.format_bytes(total)}"
+            if speed:
+                detail += f" · {progress.format_bytes(speed)}/s"
+            progress.update(
+                job_id,
+                "download",
+                (done / total * 100) if total else None,
+                detail,
+            )
+        elif status.get("status") == "finished":
+            progress.update(job_id, "download", 100.0, "Download complete")
+
+    def report_postprocess(status: dict) -> None:
+        if status.get("status") == "started":
+            progress.update(job_id, "convert", None, "Extracting audio track")
+
+    progress.update(job_id, "download", None, "Contacting source")
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": output_path,
         "nocheckcertificate": True,
         "quiet": True,
+        "socket_timeout": 30,
+        "retries": 5,
+        "fragment_retries": 5,
+        "progress_hooks": [report],
+        "postprocessor_hooks": [report_postprocess],
         "extractor_args": {
             "youtube": {
                 "player_client": ["android", "web"]
@@ -37,8 +71,9 @@ def download_youtube_audio(url: str) -> str:
 
 
 
-def convert_to_wav(input_path: str) -> str:
+def convert_to_wav(input_path: str, job_id: Optional[str] = None) -> str:
     """Convert any audio/video file to WAV format using pydub."""
+    progress.update(job_id, "convert", None, os.path.basename(input_path))
     output_path = os.path.splitext(input_path)[0] + "_converted.wav"
     audio = AudioSegment.from_file(input_path)
     audio = audio.set_channels(1).set_frame_rate(16000) #16khz
@@ -47,31 +82,34 @@ def convert_to_wav(input_path: str) -> str:
 
 
 
-def chunk_audio(wav_path : str , chunk_minutes : int = 5) -> list:
+def chunk_audio(wav_path : str , chunk_minutes : int = 5, job_id: Optional[str] = None) -> list:
     audio = AudioSegment.from_file(wav_path)
-    chunk_ms = chunk_minutes * 60 * 1000 
+    chunk_ms = chunk_minutes * 60 * 1000
 
+    starts = list(range(0, len(audio), chunk_ms))
+    total = len(starts)
     chunks = []
 
-    for i, start in enumerate(range(0, len(audio), chunk_ms)):
+    for i, start in enumerate(starts):
+        progress.update(job_id, "chunk", (i / total) * 100, f"Part {i + 1} of {total}")
         chunk = audio[start : start + chunk_ms]
         chunk_path = f"{wav_path}_chunk_{i}.mp3"
         chunk.export(chunk_path, format="mp3", bitrate="128k")
 
         chunks.append(chunk_path)
-    
+
     return chunks
 
-def process_input(source: str) -> list:
+def process_input(source: str, job_id: Optional[str] = None) -> list:
     if source.startswith("http://") or source.startswith("https://"):
         print("Detected YouTube URL. Downloading audio...")
-        wav_path = download_youtube_audio(source)
+        wav_path = download_youtube_audio(source, job_id=job_id)
     else:
         print("Detected local file. Converting to WAV...")
-        wav_path = convert_to_wav(source)
+        wav_path = convert_to_wav(source, job_id=job_id)
 
     print("Chunking audio...")
-    chunks = chunk_audio(wav_path)
+    chunks = chunk_audio(wav_path, job_id=job_id)
     print(f"Audio ready — {len(chunks)} chunk(s) created.")
     return chunks
 

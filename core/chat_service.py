@@ -1,6 +1,7 @@
 import uuid
-from typing import Dict, Any, List, AsyncGenerator
+from typing import Dict, Any, List, AsyncGenerator, Optional
 from langchain_core.messages import HumanMessage, AIMessage
+from utils import progress
 from utils.audio_processor import process_input, cleanup_chunks
 from core.transcriber import transcribe_all
 from core.extractor import extract_all_meeting_insights
@@ -15,18 +16,26 @@ from db.database import (
 )
 
 
-def process_and_create_chat(user_id: str, source: str, language: str = "english") -> Dict[str, Any]:
-    """Runs audio/video extraction, transcription, insight generation, vector store building, 
+def process_and_create_chat(
+    user_id: str,
+    source: str,
+    language: str = "english",
+    job_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Runs audio/video extraction, transcription, insight generation, vector store building,
     and saves the session in SQLite database for sidebar retrieval."""
     meeting_id = f"meeting_{uuid.uuid4().hex[:8]}"
     print(f"Processing new meeting [{meeting_id}] for user [{user_id}] from source: {source}...")
 
-    chunks = process_input(source)
+    chunks = process_input(source, job_id=job_id)
     try:
-        transcript = transcribe_all(chunks, language)
+        transcript = transcribe_all(chunks, language, job_id=job_id)
+
+        progress.update(job_id, "insights", None, "Summarizing the meeting")
         insights = extract_all_meeting_insights(transcript)
-        
+
         # Build Chroma vector store with meeting_id metadata isolation
+        progress.update(job_id, "index", None, "Indexing for questions")
         build_rag_chain(transcript, meeting_id=meeting_id)
 
         # Action items conversion to dict list
